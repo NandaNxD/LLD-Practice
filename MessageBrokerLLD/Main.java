@@ -1,8 +1,11 @@
 package MessageBrokerLLD;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 /*
 Problem Statement
@@ -26,7 +29,9 @@ class Topic{
     };
 
     void addSubscriber(Subscriber subscriber){
-        subscribers.add(subscriber);
+        if(!subscribers.contains(subscriber)){
+            subscribers.add(subscriber);
+        }
     }
 
     void addMessage(Message message){
@@ -50,30 +55,91 @@ class Message{
     }
 }
 
-interface Publisher{
-    void sendMessage(Message message);
+class Producer{
+    String id;
+    MessageBroker messageBroker;
+
+    public Producer(String id,MessageBroker messageBroker){
+        this.id=id;
+        this.messageBroker=messageBroker;
+    }
+
+    public void sendMessage(String topicName,Message message) throws Exception{
+        messageBroker.publishMessage(topicName,message);
+    }
+
 }
 
-interface Subscriber {
-    void receiveMessage(Message message);
+
+class Subscriber{
+    String id;
+
+    public Subscriber(String id){
+        this.id=id;
+    }
+
+    public void receiveMessage(Message message) {
+        System.out.println(message.getValue());
+    }
+
 }
 
 
 class MessageBroker{
-    List<Topic> topics=new ArrayList<>();
+    Map<String,Topic> topicRegistry=new HashMap<>();
 
-    void addTopic(String topicName){
-        Optional<Topic> optionalTopic=topics.stream().filter((topic)->topic.getTopicName().equals(topicName)).findFirst();
-
-        if(optionalTopic.isEmpty()){
-            topics.add(new Topic(topicName));
+    public void createTopic(String topicName) throws Exception{
+        if(!topicRegistry.containsKey(topicName)){
+            topicRegistry.put(topicName, new Topic(topicName));
         }
+        else{
+            throw new Exception("Topic already present with same name");
+        }
+    }
+
+    public void subscribeToTopic(String topicName, Subscriber subscriber) throws Exception{
+        Topic topic=topicRegistry.get(topicName);
+        if(topic!=null){
+            topic.addSubscriber(subscriber);
+        }
+        else{
+            throw new Exception("Topic not found with the name");
+        }
+    }
+
+    public void publishMessage(String topicName,Message message) throws Exception{
+        Topic topic=topicRegistry.get(topicName);
+
+        if(topic==null){
+            throw new Exception("Topic not found with the topic name");
+        }
+
+        topic.addMessage(message);
     }
 
 }
 
 public class Main {
-    public static void main(String[] args) {
-        
+    public static void main(String[] args) throws Exception {
+        MessageBroker messageBroker=new MessageBroker();
+
+        Subscriber subscriber1=new Subscriber("1");
+        Subscriber subscriber2= new Subscriber("2");
+
+        messageBroker.createTopic("FirstTopic");
+
+        Producer producer=new Producer("1", messageBroker);
+
+        producer.sendMessage("FirstTopic", new Message("FirstMessage"));
+
+        messageBroker.subscribeToTopic("FirstTopic", subscriber1);
+
+        producer.sendMessage("FirstTopic", new Message("SecondMessage"));        
+
+        messageBroker.subscribeToTopic("FirstTopic", subscriber2);
+
+        producer.sendMessage("FirstTopic", new Message("ThirdMessage"));
+
     }
 }
+// javac MessageBrokerLLD/Main.java && java MessageBrokerLLD/Main
