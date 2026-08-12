@@ -2,10 +2,16 @@ package MessageBrokerLLD;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /*
 Problem Statement
@@ -15,130 +21,156 @@ Design and implement a Publish-Subscribe (Pub/Sub) system that allows
 The system should support multiple topics, multiple subscribers per topic, and asynchronous message delivery.
  */
 
-class Topic{
-    private String topicName;
-    private List<Subscriber> subscribers=new ArrayList<>();
-    private List<Message> messages=new ArrayList<>();
-
-    public Topic(String topicName){
-        this.topicName=topicName;
-    }
-
-    public String getTopicName() {
-        return topicName;
-    };
-
-    void addSubscriber(Subscriber subscriber){
-        if(!subscribers.contains(subscriber)){
-            subscribers.add(subscriber);
-        }
-    }
-
-    void addMessage(Message message){
-        this.messages.add(message);
-
-        for (Subscriber subscriber : this.subscribers) {
-            subscriber.receiveMessage(message);
-        }
-    }
-}
-
 class Message{
+    private String id;
     private String value;
 
     public Message(String value){
+        id=UUID.randomUUID().toString();
         this.value=value;
     }
 
+    public String getId() {
+        return id;
+    }
     public String getValue() {
         return value;
+    };
+}
+
+class Topic{
+    private String id;
+    private String topicName;
+
+    Set<Subscriber> subscribers=ConcurrentHashMap.newKeySet();
+
+    public Topic(String topicName){
+        id=UUID.randomUUID().toString();
+        this.topicName=topicName;
+    }
+
+    void registerSubscriber(Subscriber subscriber){
+        subscribers.add(subscriber);
+    }
+
+    void deRegisterSubscriber(Subscriber subscriber){
+        subscribers.remove(subscriber);
     }
 }
 
 class Producer{
-    String id;
+    private String id;
     MessageBroker messageBroker;
 
-    public Producer(String id,MessageBroker messageBroker){
+    public Producer(String id, MessageBroker messageBroker){
         this.id=id;
         this.messageBroker=messageBroker;
     }
 
-    public void sendMessage(String topicName,Message message) throws Exception{
-        messageBroker.publishMessage(topicName,message);
+    public void publishMessage(String topicName, Message message) throws TopicNotFoundException{
+        this.messageBroker.publishMessage(topicName,message);
     }
-
 }
 
-
 class Subscriber{
-    String id;
+    private String id;
 
     public Subscriber(String id){
         this.id=id;
     }
-
-    public void receiveMessage(Message message) {
-        System.out.println(message.getValue());
+    
+    public void consumeMessage(Message message){
+        System.out.println(id+ " "+message.getValue());
     }
-
 }
 
+class TopicNotFoundException extends Exception{
+    private String message;
+
+    public TopicNotFoundException(){
+
+    }
+
+    public TopicNotFoundException(String message) {
+        this.message=message;
+    }
+}
 
 class MessageBroker{
-    Map<String,Topic> topicRegistry=new HashMap<>();
 
-    public void createTopic(String topicName) throws Exception{
-        if(!topicRegistry.containsKey(topicName)){
-            topicRegistry.put(topicName, new Topic(topicName));
-        }
-        else{
-            throw new Exception("Topic already present with same name");
-        }
-    }
+    Map<String,Topic> topicRegistry=new ConcurrentHashMap<>();
 
-    public void subscribeToTopic(String topicName, Subscriber subscriber) throws Exception{
-        Topic topic=topicRegistry.get(topicName);
+    public void createTopic(String topicName) throws TopicNotFoundException{
+        Topic topic=topicRegistry.putIfAbsent(topicName, new Topic(topicName));
         if(topic!=null){
-            topic.addSubscriber(subscriber);
-        }
-        else{
-            throw new Exception("Topic not found with the name");
+            throw new TopicNotFoundException("Topic with this name already exits");
         }
     }
 
-    public void publishMessage(String topicName,Message message) throws Exception{
+    public void subscribe(String topicName, Subscriber subscriber) throws TopicNotFoundException{
         Topic topic=topicRegistry.get(topicName);
 
-        if(topic==null){
-            throw new Exception("Topic not found with the topic name");
+        if(topic!=null){
+            topic.registerSubscriber(subscriber);
         }
-
-        topic.addMessage(message);
+        else{
+            throw new TopicNotFoundException();
+        }
     }
 
+    public void unSubscribe(String topicName, Subscriber subscriber) throws TopicNotFoundException {
+        Topic topic = topicRegistry.get(topicName);
+
+        if (topic != null) {
+            topic.deRegisterSubscriber(subscriber);
+        } else {
+            throw new TopicNotFoundException();
+        }
+    }
+
+    public void publishMessage(String topicName, Message message) throws TopicNotFoundException{
+        Topic topic = topicRegistry.get(topicName);
+
+        if (topic != null) {
+            Set<Subscriber> subscribers=topic.subscribers;
+
+            for(Subscriber subscriber:subscribers){
+                subscriber.consumeMessage(message);
+            }
+
+        } else {
+            throw new TopicNotFoundException();
+        }
+    }
 }
+
 
 public class Main {
     public static void main(String[] args) throws Exception {
         MessageBroker messageBroker=new MessageBroker();
-
         Subscriber subscriber1=new Subscriber("1");
-        Subscriber subscriber2= new Subscriber("2");
+        Subscriber subscriber2 = new Subscriber("2");
 
-        messageBroker.createTopic("FirstTopic");
+        Message message1=new Message("Message 1");
+        Message message2 = new Message("Message 2");
+        Message message3 = new Message("Message 3");
+
+        final String firstTopicName="FirstTopic";
+
+        messageBroker.createTopic(firstTopicName);
+
+        messageBroker.subscribe(firstTopicName, subscriber1);
+        messageBroker.subscribe(firstTopicName, subscriber2);
 
         Producer producer=new Producer("1", messageBroker);
 
-        producer.sendMessage("FirstTopic", new Message("FirstMessage"));
+        producer.publishMessage(firstTopicName, message1);
+        
+        messageBroker.unSubscribe(firstTopicName, subscriber2);
 
-        messageBroker.subscribeToTopic("FirstTopic", subscriber1);
+        producer.publishMessage(firstTopicName, message2);
 
-        producer.sendMessage("FirstTopic", new Message("SecondMessage"));        
 
-        messageBroker.subscribeToTopic("FirstTopic", subscriber2);
-
-        producer.sendMessage("FirstTopic", new Message("ThirdMessage"));
 
     }
 }
