@@ -26,6 +26,11 @@ class User{
     public String getId() {
         return id;
     }
+
+    @Override
+    public String toString() {
+        return "User [id=" + id + ", name=" + name + "]";
+    }
 }
 
 class UserGroup{
@@ -187,19 +192,35 @@ class ExpenseFactory{
     }
 }
 
-class Transaction implements Comparable<Transaction>{
+class UserBalance implements Comparable<UserBalance>{
     User user;
     double amount;
 
-    public Transaction(User user,double amount){
+    public UserBalance(User user,double amount){
         this.user=user;
         this.amount=amount;
     }
 
-    public int compareTo(Transaction o){
+    public int compareTo(UserBalance o){
         return (int)(this.amount-o.amount);
     }
+}
 
+class Transaction{
+    User from;
+    User to;
+    double amount;
+    public Transaction(User from, User to , double amount){
+        this.from=from;
+        this.to=to;
+        this.amount=amount;
+    }
+
+    @Override
+    public String toString() {
+        return "Transaction [from=" + from + ", to=" + to + ", amount=" + amount + "]";
+    }
+    
 }
 
 class SplitwiseService{
@@ -237,8 +258,10 @@ class SplitwiseService{
 
             expense.splits.forEach((split)->{
                 userBalances.compute(split.getUser(), (k,v)->{
+                    System.out.println(k+" "+v);
+
                     double oldValue=v==null?0:v;
-                    System.out.println(split.getAmount());
+
                     if(split.getUser().equals(user)){
                         return oldValue+amount-split.getAmount();
                     }
@@ -249,38 +272,38 @@ class SplitwiseService{
             });
         }
 
-        PriorityQueue<Transaction> postiveBalanceQueue=new PriorityQueue<>();
-        PriorityQueue<Transaction> negativeBalanceQueue = new PriorityQueue<>();
+        PriorityQueue<UserBalance> postiveBalanceQueue=new PriorityQueue<>();
+        PriorityQueue<UserBalance> negativeBalanceQueue = new PriorityQueue<>();
 
         userBalances.forEach((user,amount)->{
             if(amount>0){
-                postiveBalanceQueue.add(new Transaction(user, amount));
+                postiveBalanceQueue.add(new UserBalance(user, amount));
             }
             else if(amount<0){
-                negativeBalanceQueue.add(new Transaction(user, Math.abs(amount)));
+                negativeBalanceQueue.add(new UserBalance(user, Math.abs(amount)));
             }            
         });
 
         List<Transaction> txs=new ArrayList<>();
 
         while(!(negativeBalanceQueue.isEmpty() && postiveBalanceQueue.isEmpty())){
-            Transaction tx1=negativeBalanceQueue.poll();
-            Transaction tx2=postiveBalanceQueue.poll();
+            UserBalance tx1=negativeBalanceQueue.poll();
+            UserBalance tx2=postiveBalanceQueue.poll();
 
             if(tx1.amount<tx2.amount){
-                txs.add(new Transaction(tx1.user,tx1.amount));
-                postiveBalanceQueue.add(new Transaction(tx2.user, tx2.amount-tx1.amount));
+                txs.add(new Transaction(tx1.user, tx2.user,tx1.amount));
+                postiveBalanceQueue.add(new UserBalance(tx2.user, tx2.amount-tx1.amount));
             }
             else if(tx1.amount==tx2.amount){
-                txs.add(tx1);
+                txs.add(new Transaction(tx1.user, tx2.user, tx1.amount));
             }
             else{
-                txs.add(new Transaction(tx1.user, tx2.amount));
-                negativeBalanceQueue.add(new Transaction(tx1.user, tx1.amount - tx2.amount));
+                txs.add(new Transaction(tx1.user,tx2.user, tx2.amount));
+                negativeBalanceQueue.add(new UserBalance(tx1.user, tx1.amount - tx2.amount));
             }
         }
 
-        System.out.println(txs.get(0).user.getName());
+        System.out.println(txs.get(0));
 
     }
 }
@@ -297,11 +320,20 @@ public class Main {
         splits.add(new EqualSplit(naveen));
         splits.add(new EqualSplit(nandan));
 
-        Expense expense=ExpenseFactory.createExpense(ExpenseType.EQUAL, "GOA Trip", nandan, totalAmount, splits);
+        List<Split> splits2 = new ArrayList<>();
+        splits2.add(new PercentageSplit(naveen,90));
+        splits2.add(new PercentageSplit(nandan,10));
+
+        Expense expense1=ExpenseFactory.createExpense(ExpenseType.EQUAL, "GOA Trip", naveen, totalAmount, splits);
+
+        Expense expense2 = ExpenseFactory.createExpense(ExpenseType.PERCENTAGE, "GOA Trip", nandan, 7000, splits2);
+
+        System.out.println(expense2.splits);
 
         SplitwiseService service=new SplitwiseService();
 
-        service.addExpense("first", expense);
+        service.addExpense("first", expense1);
+        service.addExpense("first", expense2);
 
         service.calculateBalanceSheet("first");
 
