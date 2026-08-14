@@ -272,8 +272,10 @@ class SplitwiseService{
             });
         }
 
-        PriorityQueue<UserBalance> postiveBalanceQueue=new PriorityQueue<>();
-        PriorityQueue<UserBalance> negativeBalanceQueue = new PriorityQueue<>();
+        PriorityQueue<UserBalance> postiveBalanceQueue=new PriorityQueue<>(
+                (a, b) -> Double.compare(b.amount, a.amount));
+        PriorityQueue<UserBalance> negativeBalanceQueue = new PriorityQueue<>(
+                (a, b) -> Double.compare(b.amount, a.amount));
 
         userBalances.forEach((user,amount)->{
             if(amount>0){
@@ -303,7 +305,7 @@ class SplitwiseService{
             }
         }
 
-        System.out.println(txs.get(0));
+        System.out.println(txs);
 
     }
 }
@@ -313,6 +315,7 @@ public class Main {
 
         User nandan=new User("Nandan");
         User naveen=new User("Naveen");
+        User sanjay = new User("Sanjay");
 
         double totalAmount=15000;
 
@@ -321,19 +324,24 @@ public class Main {
         splits.add(new EqualSplit(nandan));
 
         List<Split> splits2 = new ArrayList<>();
-        splits2.add(new PercentageSplit(naveen,90));
-        splits2.add(new PercentageSplit(nandan,10));
+        splits2.add(new PercentageSplit(naveen,50));
+        splits2.add(new PercentageSplit(nandan,50));
+
+        List<Split> splits3 = new ArrayList<>();
+        splits3.add(new EqualSplit(nandan));
+        splits3.add(new EqualSplit(sanjay));
 
         Expense expense1=ExpenseFactory.createExpense(ExpenseType.EQUAL, "GOA Trip", naveen, totalAmount, splits);
-
         Expense expense2 = ExpenseFactory.createExpense(ExpenseType.PERCENTAGE, "GOA Trip", nandan, 7000, splits2);
 
-        System.out.println(expense2.splits);
+        Expense expense3 = ExpenseFactory.createExpense(ExpenseType.EQUAL, "GOA Trip", nandan, 1000, splits3);
+
 
         SplitwiseService service=new SplitwiseService();
 
         service.addExpense("first", expense1);
         service.addExpense("first", expense2);
+        service.addExpense("first", expense3);
 
         service.calculateBalanceSheet("first");
 
