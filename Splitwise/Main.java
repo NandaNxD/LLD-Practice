@@ -185,11 +185,53 @@ class ExpenseFactory{
 }
 
 class SplitwiseService{
-    public void addExpense(){
+    Map<String, Map<String, Double>> balanceSheet=new HashMap<>();
+
+    Map<String, List<Expense>> groupExpenseMap=new HashMap<>();
+
+    public void addExpense(String groupId,Expense expense){
+
+        groupExpenseMap.compute(groupId,(k,v)->{
+            if(v==null){
+                return new ArrayList<>(List.of(expense));
+            }
+            v.add(expense);
+            return v;
+        });
 
     }
 
-    public void calculateBalanceSheet(){
+    public void calculateBalanceSheet(String groupId){
+        // what do i want to do
+        /**
+         * Get everyones price,
+         * put the user who paid as +ve with the total amount
+         * put the users who owe, as negative
+         */
+
+        List<Expense> expenses=groupExpenseMap.get(groupId);
+
+        Map<User,Double> userBalances=new HashMap<>();
+
+        for(Expense expense:expenses){
+            User user=expense.paidBy;
+            double amount=expense.amount;
+
+            expense.splits.forEach((split)->{
+                userBalances.compute(split.getUser(), (k,v)->{
+                    double oldValue=v==null?0:v;
+                    System.out.println(split.getAmount());
+                    if(split.getUser().equals(user)){
+                        return oldValue+amount-split.getAmount();
+                    }
+                    else{
+                        return oldValue-split.getAmount();
+                    }
+                });
+            });
+        }
+
+        System.out.println(userBalances);
 
     }
 }
@@ -207,7 +249,13 @@ public class Main {
         splits.add(new EqualSplit(nandan));
 
         Expense expense=ExpenseFactory.createExpense(ExpenseType.EQUAL, "GOA Trip", nandan, totalAmount, splits);
-        System.out.println(expense.splits.get(0).getAmount());
+
+        SplitwiseService service=new SplitwiseService();
+
+        service.addExpense("first", expense);
+
+        service.calculateBalanceSheet("first");
+
     }
 }
 // javac Splitwise/Main.java && java Splitwise/Main 
