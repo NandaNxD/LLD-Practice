@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,6 +13,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
 class User{
     private final String id;
     private final String name;
+
+    public String getName() {
+        return name;
+    }
 
     public User(String name){
         this.id=UUID.randomUUID().toString();
@@ -180,7 +185,20 @@ class ExpenseFactory{
             throw new Exception("Expense type not implemented");
         }
     }
+}
 
+class Transaction implements Comparable<Transaction>{
+    User user;
+    double amount;
+
+    public Transaction(User user,double amount){
+        this.user=user;
+        this.amount=amount;
+    }
+
+    public int compareTo(Transaction o){
+        return (int)(this.amount-o.amount);
+    }
 
 }
 
@@ -231,7 +249,38 @@ class SplitwiseService{
             });
         }
 
-        System.out.println(userBalances);
+        PriorityQueue<Transaction> postiveBalanceQueue=new PriorityQueue<>();
+        PriorityQueue<Transaction> negativeBalanceQueue = new PriorityQueue<>();
+
+        userBalances.forEach((user,amount)->{
+            if(amount>0){
+                postiveBalanceQueue.add(new Transaction(user, amount));
+            }
+            else if(amount<0){
+                negativeBalanceQueue.add(new Transaction(user, Math.abs(amount)));
+            }            
+        });
+
+        List<Transaction> txs=new ArrayList<>();
+
+        while(!(negativeBalanceQueue.isEmpty() && postiveBalanceQueue.isEmpty())){
+            Transaction tx1=negativeBalanceQueue.poll();
+            Transaction tx2=postiveBalanceQueue.poll();
+
+            if(tx1.amount<tx2.amount){
+                txs.add(new Transaction(tx1.user,tx1.amount));
+                postiveBalanceQueue.add(new Transaction(tx2.user, tx2.amount-tx1.amount));
+            }
+            else if(tx1.amount==tx2.amount){
+                txs.add(tx1);
+            }
+            else{
+                txs.add(new Transaction(tx1.user, tx2.amount));
+                negativeBalanceQueue.add(new Transaction(tx1.user, tx1.amount - tx2.amount));
+            }
+        }
+
+        System.out.println(txs.get(0).user.getName());
 
     }
 }
